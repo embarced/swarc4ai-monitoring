@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arca.shop · AI-Monitoring — Übung „Was ist hier los?"</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #222220;
+    --ink: #ffffff;
+    --ink2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --blue: #3987e5;
+    --violet: #9085e9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink2);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .logo {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700; font-size: 18px; color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+  .logo .cursor { color: var(--blue); }
+  .headsub { color: var(--muted); font-size: 13px; }
+  nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 20px 0 20px; }
+  nav button {
+    appearance: none; border: 1px solid var(--border); background: var(--surface);
+    color: var(--ink2); font: inherit; font-size: 13.5px;
+    padding: 8px 14px; border-radius: 8px 8px 0 0; border-bottom: none;
+    cursor: pointer;
+  }
+  nav button:hover { background: var(--surface-2); }
+  nav button[aria-selected="true"] {
+    background: var(--page); color: var(--ink); font-weight: 600;
+    border-color: var(--blue); border-bottom: 2px solid var(--page);
+    box-shadow: inset 0 2px 0 var(--blue);
+  }
+
+  main { padding: 18px 20px 40px 20px; max-width: 1280px; margin: 0 auto; }
+  section[role="tabpanel"] { display: none; }
+  section[role="tabpanel"].active { display: block; }
+
+  /* ---------- Snapshot header ---------- */
+  .snaphead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 6px 0 2px 0; }
+  .snaphead h2 { font-size: 20px; color: var(--ink); margin: 0; font-weight: 700; }
+  .snapmeta { color: var(--muted); font-size: 13px; margin: 0 0 16px 0; }
+
+  .sysheader {
+    appearance: none; width: 100%; text-align: left;
+    display: flex; align-items: center; gap: 12px;
+    margin: 14px 0 10px 0; padding: 13px 16px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--ink); font: inherit; font-size: 15px; font-weight: 700;
+    cursor: pointer;
+  }
+  .sysheader:hover { border-color: rgba(255,255,255,0.3); background: #2a2a28; }
+  .sysheader.ml[aria-expanded="true"] { border-color: rgba(57,135,229,0.55); }
+  .sysheader.rag[aria-expanded="true"] { border-color: rgba(144,133,233,0.55); }
+  .sysheader .tri {
+    flex: none; font-size: 13px; line-height: 1;
+    transition: transform 0.15s ease; transform: rotate(90deg);
+  }
+  .sysheader[aria-expanded="false"] .tri { transform: rotate(0deg); }
+  .sysheader.ml .tri { color: var(--blue); }
+  .sysheader.rag .tri { color: var(--violet); }
+  .sysheader .sub { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+  .sysheader .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .sysheader.ml .dot { background: var(--blue); }
+  .sysheader.rag .dot { background: var(--violet); }
+  .sysheader .chev {
+    margin-left: auto; flex: none;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    color: var(--ink2); font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px;
+    background: var(--surface);
+  }
+  .sysheader:hover .chev { color: var(--ink); border-color: rgba(255,255,255,0.3); }
+  .sysheader .chev::before { content: "Zuklappen"; }
+  .sysheader[aria-expanded="false"] .chev::before { content: "Aufklappen"; }
+  .sysheader .chev::after { content: "▾"; font-size: 12px; transition: transform 0.15s ease; }
+  .sysheader[aria-expanded="false"] .chev::after { transform: rotate(-90deg); }
+  .sysgrid.collapsed { display: none; }
+  @media (max-width: 620px) { .sysheader .sub { display: none; } }
+
+  /* ---------- Grid & panels ---------- */
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+  .panel {
+    grid-column: span 12;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px 16px 16px;
+    min-width: 0;
+  }
+  .panel h3 {
+    margin: 0 0 10px 0; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  }
+  .panel .foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  @media (min-width: 860px) {
+    .span3 { grid-column: span 3; }
+    .span4 { grid-column: span 4; }
+    .span5 { grid-column: span 5; }
+    .span6 { grid-column: span 6; }
+    .span7 { grid-column: span 7; }
+    .span8 { grid-column: span 8; }
+    .span12 { grid-column: span 12; }
+  }
+
+  /* ---------- Stat tiles ---------- */
+  .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); }
+  .tile {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  .tile .label { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .tile .value { font-size: 23px; font-weight: 600; color: var(--ink); }
+  .tile .value small { font-size: 14px; font-weight: 400; color: var(--ink2); }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Tables ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  td { color: var(--ink2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dim { color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
+
+  /* ---------- Charts ---------- */
+  .chartwrap { position: relative; }
+  .chartwrap svg { display: block; width: 100%; height: auto; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: #0d0d0dee; border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 9px; font-size: 12.5px; color: var(--ink);
+    white-space: nowrap; z-index: 5; transform: translate(-50%, -110%);
+  }
+  .tooltip .tl { color: var(--muted); }
+  details.tableview { margin-top: 8px; }
+  details.tableview summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  details.tableview table { margin-top: 6px; font-size: 12.5px; }
+
+  /* ---------- Journal ---------- */
+  .journal table td:first-child { white-space: nowrap; color: var(--muted); }
+
+  /* ---------- Chat-Stichprobe ---------- */
+  .chats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .chat {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .chat .q { color: var(--ink); font-weight: 600; }
+  .chat .q::before { content: "Kunde: "; color: var(--muted); font-weight: 400; }
+  .chat .a { color: var(--ink2); }
+  .chat .a::before { content: "Assistent: "; color: var(--muted); }
+  .chat .reply { color: var(--ink2); font-style: italic; }
+  .chat .reply::before { content: "Kunde: "; color: var(--muted); font-style: normal; }
+  .chat .meta {
+    margin-top: auto; padding-top: 6px; border-top: 1px solid var(--grid);
+    color: var(--muted); font-size: 12px;
+  }
+
+  /* ---------- Start tab ---------- */
+  .intro h2 { color: var(--ink); font-size: 22px; margin: 8px 0 4px 0; }
+  .intro .lead { font-size: 15px; max-width: 860px; }
+  .syscard h3 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
+  .syscard p { margin: 6px 0; font-size: 13.5px; }
+  .syscard .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); }
+  .task ol { margin: 6px 0 2px 0; padding-left: 20px; }
+  .task li { margin: 7px 0; }
+  .task .q { color: var(--ink); font-weight: 600; }
+  .note ul { margin: 0; padding-left: 18px; }
+  .note li { margin: 4px 0; }
+  .note b, .panel b { color: var(--ink); font-weight: 600; }
+  .kicker { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue); font-weight: 700; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 18px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">▸ arca.shop<span class="cursor">_</span></span>
+  <span class="headsub">AI Operations · Monitoring (Grafana)</span>
+</header>
+
+<nav role="tablist" aria-label="Snapshots">
+  <button role="tab" aria-selected="true" data-tab="start">Start · Szenario &amp; Aufgabe</button>
+  <button role="tab" aria-selected="false" data-tab="s1">Snapshot 1</button>
+  <button role="tab" aria-selected="false" data-tab="s2">Snapshot 2</button>
+  <button role="tab" aria-selected="false" data-tab="s3">Snapshot 3</button>
+  <button role="tab" aria-selected="false" data-tab="s4">Snapshot 4</button>
+</nav>
+
+<main>
+
+<!-- ============================ START ============================ -->
+<section id="start" role="tabpanel" class="active intro">
+  <p class="kicker">Übung · „Was ist hier los?"</p>
+  <h2>Vier Momentaufnahmen des arca.shop-Dashboards</h2>
+  <p class="lead">
+    Ihr seid das Entwicklungs- und Architekturteam von arca.shop. Zwei AI-Features laufen
+    in Produktion — mit Monitoring auf allen vier Ebenen (System · Datenqualität · Modell/Qualität · Business).
+    Die vier Snapshots zeigen <b>dasselbe Dashboard zu vier verschiedenen Zeitpunkten</b>.
+    In jedem steckt ein Problem. Niemand hat es für euch markiert.
+  </p>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="panel span6 syscard">
+      <span class="tag" style="border-color: rgba(57,135,229,0.5);"><span style="color:var(--blue)">◆</span> PreisPilot · klassisches ML</span>
+      <h3>Preisbewertung für Einzelstücke</h3>
+      <p>Gradient-Boosting-Modell. Schätzt <b>Ankaufspreise</b> für Einlieferungen im
+      Ankaufsportal und setzt jede Nacht die <b>Verkaufspreise</b> der ~4.000 gelisteten
+      Einzelstücke neu (Repricing-Batch).</p>
+      <p style="color:var(--muted); font-size:12.5px;">Features u.&nbsp;a.: <code>plattform</code>,
+      <code>zustand_score</code>, <code>vollstaendigkeit</code>, <code>titel_nachfrage_index</code>,
+      <code>marktpreis_referenz_30d</code> (externer Dienst „RetroPriceIndex“).</p>
+      <p style="color:var(--muted); font-size:12.5px;">Leitmetrik: <b style="color:var(--ink2)">Trefferquote ±10&nbsp;%</b> —
+      Anteil verkaufter Einzelstücke, deren erzielter Preis max. ±10&nbsp;% von der Schätzung abweicht. Ziel &gt; 80&nbsp;%.</p>
+    </div>
+
+    <div class="panel span6 syscard">
+      <span class="tag" style="border-color: rgba(144,133,233,0.55);"><span style="color:var(--violet)">✦</span> Kompatibilitäts-Assistent · GenAI (RAG)</span>
+      <h3>„Passt das zu meiner Konsole?“</h3>
+      <p>Chat auf den Produktseiten. Beantwortet Kompatibilitätsfragen aus den
+      <b>Redaktionsinhalten</b>: Ratgeber, Kompatibilitätstabellen, Handbuch-PDFs
+      (Suche über den Index + Sprachmodell). ~115 Chats/Tag.</p>
+      <p style="color:var(--muted); font-size:12.5px;">Qualitätssicherung: nächtliche
+      <b style="color:var(--ink2)">Eval-Suite</b> mit 150 kuratierten Frage-Antwort-Paaren
+      (Korrektheit &amp; Groundedness, automatisch bewertet).</p>
+      <p style="color:var(--muted); font-size:12.5px;">Business-Kontext: 40&nbsp;% der 90 Supportanfragen/Tag
+      sind Kompatibilitätsfragen — und die Kundschaft „erwartet eine Antwort, die stimmt“.</p>
+    </div>
+
+    <div class="panel span7 task">
+      <h3>Eure Aufgabe — für jeden Snapshot</h3>
+      <ol>
+        <li><span class="q">Befund:</span> Wo im Dashboard stimmt etwas nicht? Welche Panels zeigen es — und welche zeigen bewusst <i>kein</i> Problem?</li>
+        <li><span class="q">Diagnose:</span> Was ist die wahrscheinliche Ursache? Belegt sie mit den Daten.</li>
+        <li><span class="q">Sofortmaßnahme:</span> Was tut ihr JETZT?</li>
+        <li><span class="q">Prävention:</span> Welche Monitoring- oder Architekturkomponente hätte das früher erkannt — oder verhindert?</li>
+      </ol>
+    </div>
+
+    <div class="panel span5 note">
+      <h3>Ablauf &amp; Hinweise</h3>
+      <ul>
+        <li>Arbeit zu zweit, ca. <b>25 Minuten</b> für alle vier Snapshots.</li>
+        <li>Das <b>Betriebs-Journal</b> unten in jedem Snapshot listet die letzten Ereignisse — nicht jedes davon ist relevant.</li>
+        <li>Notiert eure Antworten stichpunktartig. Danach Ergebnisrunde: Jedes Paar stellt einen Snapshot vor.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="s1" role="tabpanel"></section>
+<section id="s2" role="tabpanel"></section>
+<section id="s3" role="tabpanel"></section>
+<section id="s4" role="tabpanel"></section>
+
+</main>
+
+<footer>Übung „Was ist hier los?“ · Monitoring, Observability &amp; KPIs für AI-Systeme · Fallbeispiel arca.shop</footer>
+
+<script>
+/* =================================================================
+   Snapshot-Daten — identische Panel-Struktur, unterschiedliche Werte
+   ================================================================= */
+const SNAPSHOTS = [
+  {
+    id: 's1', title: 'Snapshot 1',
+    context: 'Montagmorgen · wöchentlicher Monitoring-Review',
+    pp: {
+      hitrate: [84.2, 83.1, 81.6, 79.8, 77.5, 74.9, 72.4, 69.8],
+      hitlabels: ['KW 24','KW 25','KW 26','KW 27','KW 28','KW 29','KW 30','KW 31'],
+      retraining: 'v2.4 · letztes Retraining vor 5 Monaten',
+      platform: [
+        ['8-/16-Bit (NES, SNES, Mega Drive …)', 34, 28],
+        ['32-/64-Bit (PS1, N64, Saturn …)', 30, 26],
+        ['PS2 / GameCube / Xbox', 24, 21],
+        ['Handhelds (Game Boy … PSP)', 12, 11],
+        ['PS3 / Xbox 360 / Wii', 0, 14],
+      ],
+      nulls: [
+        ['plattform', 0.0, 0.0],
+        ['zustand_score', 0.5, 0.6],
+        ['vollstaendigkeit', 0.3, 0.3],
+        ['marktpreis_referenz_30d', 0.8, 0.9],
+        ['titel_nachfrage_index', 0.2, 0.1],
+      ],
+      repricing: { changes: '62', runtime: '24 min · 4.008 Artikel', movers: [
+        ['Dreamcast VMU (gut)', '19 €', '26 €'],
+        ['Chrono Trigger, SNES (CIB)', '145 €', '131 €'],
+        ['PSP-3004 (sehr gut, OVP)', '89 €', '96 €'],
+      ]},
+      system: { lat: '160', err: '0,1', evals: '38' },
+      business: { annahme: '58', annahmePrev: 'vor 8 Wochen: 72 %', korrekt: '29', korrektSub: 'der Bewertungen · üblich ~10 %' },
+    },
+    as: {
+      evalk: '93,9', evalkPrev: 'vor 4 Wochen: 93,7 %', ground: '0,92', groundPrev: 'vor 4 Wochen: 0,92',
+      system: { lat: '2,8', err: '0,2', chats: '116', chatsPrev: 'vor 4 Wochen: 113', abbruch: '6', abbruchPrev: 'vor 4 Wochen: 7 %' },
+      thumbs: [4.4, 4.1, 4.6, 4.3],
+      tickets: '2', ticketsPrev: 'vor 4 Wochen: 3 / Woche', retouren: '6,2', retourenPrev: 'vor 4 Wochen: 6,0 %',
+      cost: [3.4, 3.6, 3.3, 3.8, 3.5, 3.4, 3.7, 3.5, 3.6, 3.4, 3.8, 3.6, 3.5],
+      tokens: '4.200', tokensPrev: 'vor 4 Wochen: 4.100', perAnswer: '0,03',
+      chats: [
+        { q: '„Passt der 8BitDo Retro Receiver an eine PAL-SNES?“',
+          a: '„Ja — der Retro Receiver funktioniert an PAL- wie NTSC-Konsolen gleichermaßen. Wichtig ist nur, den Controller vorher per Firmware-Update zu koppeln …“',
+          fb: '👍', time: '3,1 s', source: 'Kompatibilitätstabelle „Controller & Adapter“' },
+        { q: '„Was ist meine Sammlung wert? Hab ca. 80 SNES-Spiele.“',
+          a: '„Eine Wertschätzung kann ich dir hier leider nicht geben — dafür gibt es unser Ankaufsportal: Nach ein paar Fotos bekommst du dort ein konkretes Angebot …“',
+          fb: '👎', time: '2,4 s', source: 'FAQ Ankauf' },
+        { q: '„Ehrlich: NES oder SNES — was soll ich mir holen?“',
+          a: '„Beide Systeme haben starke Bibliotheken: Das NES steht für die Puristen-Klassiker, das SNES für 16-Bit-Highlights. Es hängt davon ab, was du spielen willst …“',
+          fb: '👎', time: '2,9 s', source: 'Ratgeber „Einstieg in Retro-Konsolen“' },
+      ],
+    },
+    journal: [
+      ['vor 6 Wochen', 'Ankauf: Aktion „Bringt eure Schätze“ gestartet (Newsletter, Discord, Retro-Foren)'],
+      ['vor 3 Wochen', 'Infrastruktur: k3s-Upgrade auf v1.31'],
+      ['vor 2 Wochen', 'Storefront-Deployment: Produktseiten-Redesign'],
+      ['vor 5 Monaten', 'PreisPilot: Retraining (v2.4)'],
+      ['letzte Woche', 'Redaktion: neue Ratgeber-Serie „CRT vs. OLED“ veröffentlicht'],
+    ],
+  },
+  {
+    id: 's2', title: 'Snapshot 2',
+    context: 'Dienstag, 07:50 Uhr · Team-Chat: „Kann mal jemand aufs Dashboard schauen?“',
+    pp: {
+      hitrate: [83.9, 84.3, 83.8, 84.1, 84.0, 83.7, 84.2, 84.0],
+      hitlabels: ['KW 25','KW 26','KW 27','KW 28','KW 29','KW 30','KW 31','KW 32'],
+      retraining: 'v2.5 · letztes Retraining vor 6 Wochen',
+      platform: [
+        ['8-/16-Bit (NES, SNES, Mega Drive …)', 34, 33],
+        ['32-/64-Bit (PS1, N64, Saturn …)', 30, 31],
+        ['PS2 / GameCube / Xbox', 24, 23],
+        ['Handhelds (Game Boy … PSP)', 12, 12],
+        ['PS3 / Xbox 360 / Wii', 0, 1],
+      ],
+      nulls: [
+        ['plattform', 0.0, 0.0],
+        ['zustand_score', 0.5, 0.4],
+        ['vollstaendigkeit', 0.3, 0.2],
+        ['marktpreis_referenz_30d', 0.8, 62.3],
+        ['titel_nachfrage_index', 0.2, 0.1],
+      ],
+      repricing: { changes: '1.483', runtime: '21 min · 4.012 Artikel', movers: [
+        ['Secret of Mana, SNES (CIB, sehr gut)', '89 €', '12 €'],
+        ['GameCube-Controller, orig. (gut)', '45 €', '9 €'],
+        ['Sega Saturn, Konsole (gut, o. OVP)', '210 €', '38 €'],
+      ]},
+      system: { lat: '170', err: '0,1', evals: '36' },
+      business: { annahme: '71', annahmePrev: 'vor 8 Wochen: 72 %', korrekt: '11', korrektSub: 'der Bewertungen · üblich ~10 %' },
+    },
+    as: {
+      evalk: '94,1', evalkPrev: 'vor 4 Wochen: 93,9 %', ground: '0,92', groundPrev: 'vor 4 Wochen: 0,92',
+      system: { lat: '2,7', err: '0,2', chats: '114', chatsPrev: 'vor 4 Wochen: 115', abbruch: '6', abbruchPrev: 'vor 4 Wochen: 6 %' },
+      thumbs: [4.5, 4.2, 4.4, 4.6],
+      tickets: '3', ticketsPrev: 'vor 4 Wochen: 2 / Woche', retouren: '6,1', retourenPrev: 'vor 4 Wochen: 6,2 %',
+      cost: [3.5, 3.4, 3.7, 3.5, 3.8, 3.4, 3.6, 3.5, 3.3, 3.7, 3.6, 3.4, 3.6],
+      tokens: '4.200', tokensPrev: 'vor 4 Wochen: 4.200', perAnswer: '0,03',
+      chats: [
+        { q: '„Funktioniert die EverDrive-GBA-Flashkarte auch im Game Boy Player?“',
+          a: '„Ja — im Game Boy Player am GameCube läuft die Karte wie auf einem GBA. Beachte, dass Savegames auf der Karte selbst gespeichert werden …“',
+          fb: '👍', time: '2,6 s', source: 'Kompatibilitätstabelle „Flashkarten“' },
+        { q: '„Habt ihr den Saturn aus eurem Newsletter wieder reinbekommen?“',
+          a: '„Zum tagesaktuellen Bestand einzelner Einzelstücke kann ich nichts Verlässliches sagen — am besten direkt auf der Produktseite nachsehen oder den Verfügbarkeits-Alarm aktivieren …“',
+          fb: '👎', time: '2,2 s', source: 'FAQ Shop' },
+        { q: '„Welches Netzteil brauche ich für einen japanischen Mega Drive?“',
+          a: '„Ein japanischer Mega Drive (100 V) braucht am europäischen Netz einen Spannungswandler oder ein passendes Ersatznetzteil. Wichtig sind Polarität und …“',
+          fb: '—', time: '3,4 s', source: 'Kompatibilitätstabelle „Netzteile & Strom“' },
+      ],
+    },
+    journal: [
+      ['gestern, 23:40', 'RetroPriceIndex (Changelog des Anbieters): „API v3 released 🎉“ — Status-Page: „All systems operational“'],
+      ['vor 3 Tagen', 'Storefront-Deployment: Checkout-Optimierung'],
+      ['vor 6 Wochen', 'PreisPilot: Retraining (v2.5)'],
+      ['letzte Woche', 'Infrastruktur: OpenSearch-Minor-Update'],
+      ['seit 2 Wochen', 'Redaktion: Migration der Kompatibilitätstabellen ins neue Inhaltsformat (~40 %)'],
+    ],
+  },
+  {
+    id: 's3', title: 'Snapshot 3',
+    context: 'Donnerstag · Support meldet gehäufte Beschwerden',
+    pp: {
+      hitrate: [83.6, 84.1, 83.9, 84.4, 83.8, 84.0, 84.3, 83.9],
+      hitlabels: ['KW 27','KW 28','KW 29','KW 30','KW 31','KW 32','KW 33','KW 34'],
+      retraining: 'v2.5 · letztes Retraining vor 2 Monaten',
+      platform: [
+        ['8-/16-Bit (NES, SNES, Mega Drive …)', 34, 33],
+        ['32-/64-Bit (PS1, N64, Saturn …)', 30, 30],
+        ['PS2 / GameCube / Xbox', 24, 23],
+        ['Handhelds (Game Boy … PSP)', 12, 12],
+        ['PS3 / Xbox 360 / Wii', 0, 2],
+      ],
+      nulls: [
+        ['plattform', 0.0, 0.0],
+        ['zustand_score', 0.5, 0.5],
+        ['vollstaendigkeit', 0.3, 0.4],
+        ['marktpreis_referenz_30d', 0.8, 0.7],
+        ['titel_nachfrage_index', 0.2, 0.2],
+      ],
+      repricing: { changes: '47', runtime: '23 min · 4.021 Artikel', movers: [
+        ['Mega Drive II (gut, o. OVP)', '54 €', '61 €'],
+        ['Pokémon Kristall (Modul)', '72 €', '65 €'],
+        ['GBA SP AGS-101 (sehr gut)', '119 €', '128 €'],
+      ]},
+      system: { lat: '155', err: '0,1', evals: '41' },
+      business: { annahme: '70', annahmePrev: 'vor 8 Wochen: 71 %', korrekt: '12', korrektSub: 'der Bewertungen · üblich ~10 %' },
+    },
+    as: {
+      evalk: '94,0', evalkPrev: 'vor 4 Wochen: 93,8 %', ground: '0,92', groundPrev: 'vor 4 Wochen: 0,92',
+      system: { lat: '2,8', err: '0,2', chats: '116', chatsPrev: 'vor 4 Wochen: 112', abbruch: '7', abbruchPrev: 'vor 4 Wochen: 6 %' },
+      thumbs: [4.2, 6.1, 8.4, 11.0],
+      tickets: '9', ticketsPrev: 'vor 4 Wochen: 2 / Woche', retouren: '7,9', retourenPrev: 'vor 4 Wochen: 6,1 %',
+      cost: [3.6, 3.4, 3.5, 3.7, 3.5, 3.6, 3.4, 3.8, 3.5, 3.6, 3.7, 3.5, 3.6],
+      tokens: '4.200', tokensPrev: 'vor 4 Wochen: 4.200', perAnswer: '0,03',
+      chats: [
+        { q: '„Passt das SCART-RGB-Kabel an meine NTSC-N64?“',
+          a: '„Ja, das RGB-Kabel funktioniert an allen N64-Modellen — einfach anschließen, weitere Anpassungen sind nicht nötig …“',
+          reply: '„Hab’s gekauft — Bild bleibt schwarz.“',
+          fb: '👎', time: '2,8 s', source: 'Ratgeber „RGB und CRT-Bildqualität“' },
+        { q: '„Kann ich das Mega-Drive-II-Netzteil am Mega Drive 1 verwenden?“',
+          a: '„Die Netzteile der beiden Modelle sind untereinander austauschbar, du kannst es bedenkenlos verwenden …“',
+          reply: '„Laut Forum stimmt die Polarität nicht?!“',
+          fb: '👎', time: '3,0 s', source: 'Blog „Mega Drive Mods, Teil 2“' },
+        { q: '„Welche Speicherkarte brauche ich für Saturn-Spielstände?“',
+          a: '„Für Spielstände eignet sich grundsätzlich jede Memory-Lösung mit Action-Replay-Anschluss, zum Beispiel …“',
+          reply: '„Passt nicht in den Slot. Bitte Bestellung stornieren.“',
+          fb: '👎', time: '2,7 s', source: 'Ratgeber „Saturn-Sammlung pflegen“' },
+      ],
+    },
+    journal: [
+      ['seit 6 Wochen', 'Redaktion: Migration der Kompatibilitätstabellen ins neue Inhaltsformat (~70 %)'],
+      ['vor 5 Tagen', 'Storefront-Deployment: Bugfixes Warenkorb'],
+      ['vor 2 Monaten', 'PreisPilot: Retraining (v2.5)'],
+      ['vor 4 Wochen', 'Katalog: neue Merch-Kollektion online (600 → 640 Artikel)'],
+      ['vor 7 Wochen', 'Marketing: Newsletter-Rabattaktion Q3'],
+    ],
+  },
+  {
+    id: 's4', title: 'Snapshot 4',
+    context: 'Freitag · Monats-Review mit dem Inhaber',
+    pp: {
+      hitrate: [84.0, 83.7, 84.2, 83.8, 84.1, 84.4, 83.9, 84.1],
+      hitlabels: ['KW 29','KW 30','KW 31','KW 32','KW 33','KW 34','KW 35','KW 36'],
+      retraining: 'v2.6 · letztes Retraining vor 4 Wochen',
+      platform: [
+        ['8-/16-Bit (NES, SNES, Mega Drive …)', 34, 34],
+        ['32-/64-Bit (PS1, N64, Saturn …)', 30, 29],
+        ['PS2 / GameCube / Xbox', 24, 24],
+        ['Handhelds (Game Boy … PSP)', 12, 12],
+        ['PS3 / Xbox 360 / Wii', 0, 1],
+      ],
+      nulls: [
+        ['plattform', 0.0, 0.1],
+        ['zustand_score', 0.5, 0.4],
+        ['vollstaendigkeit', 0.3, 0.3],
+        ['marktpreis_referenz_30d', 0.8, 1.0],
+        ['titel_nachfrage_index', 0.2, 0.2],
+      ],
+      repricing: { changes: '55', runtime: '22 min · 4.017 Artikel', movers: [
+        ['Saturn-Controller Model 2', '24 €', '28 €'],
+        ['Final Fantasy IX (CIB)', '38 €', '33 €'],
+        ['N64 Expansion Pak (gut)', '31 €', '36 €'],
+      ]},
+      system: { lat: '165', err: '0,1', evals: '39' },
+      business: { annahme: '71', annahmePrev: 'vor 8 Wochen: 70 %', korrekt: '10', korrektSub: 'der Bewertungen · üblich ~10 %' },
+    },
+    as: {
+      evalk: '94,6', evalkPrev: 'vor 4 Wochen: 92,7 %', ground: '0,93', groundPrev: 'vor 4 Wochen: 0,91',
+      system: { lat: '9,8', err: '0,3', chats: '111', chatsPrev: 'vor 4 Wochen: 118', abbruch: '18', abbruchPrev: 'vor 4 Wochen: 6 %' },
+      thumbs: [4.8, 4.6, 5.2, 6.1],
+      tickets: '3', ticketsPrev: 'vor 4 Wochen: 2 / Woche', retouren: '6,3', retourenPrev: 'vor 4 Wochen: 6,1 %',
+      cost: [3.4, 3.7, 3.5, 3.9, 3.6, 3.4, 3.8, 3.5, 21.4, 48.9, 50.2, 52.3, 51.5],
+      tokens: '32.000', tokensPrev: 'vor 4 Wochen: 4.200', perAnswer: '0,46',
+      chats: [
+        { q: '„Passt der Saturn-Controller Model 2 an den Model-1-Saturn?“',
+          a: '„Ja. Im Folgenden die vollständige Übersicht der Anschlussbelegung, Modellhistorie und regionalen Varianten: 1994 erschien … [Antwort umfasst 34 Zeilen]“',
+          reply: '„Ein JA hätte gereicht. Und warum dauert das so lange?“',
+          fb: '👎', time: '24 s', source: 'Handbuch-PDF (vollständig, 84 Seiten)' },
+        { q: '„Welche Kabel liegen der GameCube-Konsole bei?“',
+          a: '— Nutzer hat den Chat verlassen, bevor die Antwort fertig war —',
+          fb: '—', time: '31 s (Abbruch)', source: 'Handbuch-PDF (vollständig, 112 Seiten)' },
+        { q: '„Läuft Pokémon Stadium auch ohne Expansion Pak?“',
+          a: '„Ja, Pokémon Stadium läuft ohne Expansion Pak; das Pak wird nur für bestimmte Modi anderer Titel benötigt …“',
+          fb: '👍', time: '12 s', source: 'Handbuch-PDF (vollständig, 68 Seiten)' },
+      ],
+    },
+    journal: [
+      ['vor 5 Tagen', 'Assistent-Release: Wechsel auf Sprachmodell „L“ (statt „M“); Kontext: komplettes Handbuch-PDF statt Top-5-Passagen („dann fehlt nie was“). CI-Gate Eval-Korrektheit > 90 %: bestanden'],
+      ['vor 2 Wochen', 'Storefront-Deployment: Filter-Verbesserungen Suche'],
+      ['vor 4 Wochen', 'PreisPilot: Retraining (v2.6)'],
+      ['gestern', 'Redaktion: 3 neue Einbauanleitungen veröffentlicht'],
+      ['vor 3 Wochen', 'Infrastruktur: Loki-Retention von 14 auf 30 Tage erhöht'],
+    ],
+  },
+];
+
+/* =================================================================
+   Rendering — für alle Snapshots identische Panel-Struktur
+   ================================================================= */
+function tile(label, value, unit, sub) {
+  return `<div class="tile"><div class="label">${label}</div><div class="value">${value}${unit ? ` <small>${unit}</small>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+}
+function fmtDelta(d, dec) {
+  const s = d > 0 ? '+' : (d < 0 ? '−' : '±');
+  return s + Math.abs(d).toLocaleString('de-DE', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+}
+
+function renderSnapshot(s) {
+  const pp = s.pp, as = s.as;
+  const platformRows = pp.platform.map(r =>
+    `<tr><td>${r[0]}</td><td class="num">${r[1]} %</td><td class="num">${r[2]} %</td><td class="num dim">${fmtDelta(r[2]-r[1],0)}</td></tr>`).join('');
+  const nullRows = pp.nulls.map(r =>
+    `<tr><td><code>${r[0]}</code></td><td class="num">${r[1].toLocaleString('de-DE',{minimumFractionDigits:1})} %</td><td class="num">${r[2].toLocaleString('de-DE',{minimumFractionDigits:1})} %</td><td class="num dim">${fmtDelta(r[2]-r[1],1)}</td></tr>`).join('');
+  const moverRows = pp.repricing.movers.map(r =>
+    `<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join('');
+  const journalRows = s.journal.map(r =>
+    `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  const chatCards = as.chats.map(c => `
+    <div class="chat">
+      <div class="q">${c.q}</div>
+      <div class="a">${c.a}</div>
+      ${c.reply ? `<div class="reply">${c.reply}</div>` : ''}
+      <div class="meta">${c.fb === '—' ? 'kein Feedback' : c.fb} · ${c.time} · Quelle: ${c.source}</div>
+    </div>`).join('');
+
+  return `
+  <div class="snaphead"><h2>${s.title}</h2></div>
+  <p class="snapmeta">${s.context}</p>
+
+  <button class="sysheader ml" data-toggle="${s.id}-pp" aria-expanded="false" aria-controls="${s.id}-pp">
+    <span class="tri">▶</span><span class="dot"></span>PreisPilot <span class="sub">· Preisbewertung (ML) · ${pp.retraining}</span><span class="chev"></span>
+  </button>
+  <div class="grid sysgrid collapsed" id="${s.id}-pp">
+
+    <div class="panel span7">
+      <h3>Modell · Trefferquote ±10 % (wöchentlich)</h3>
+      <div id="${s.id}-hitrate"></div>
+    </div>
+
+    <div class="panel span5">
+      <h3>Einlieferungen · Plattform-Mix</h3>
+      <table>
+        <thead><tr><th>Plattform-Generation</th><th class="num">Training (Referenz)</th><th class="num">Letzte 4 Wochen</th><th class="num">Δ</th></tr></thead>
+        <tbody>${platformRows}</tbody>
+      </table>
+    </div>
+
+    <div class="panel span5">
+      <h3>Feature-Qualität · NULL-Raten (letzter Batch)</h3>
+      <table>
+        <thead><tr><th>Feature</th><th class="num">üblich</th><th class="num">aktuell</th><th class="num">Δ</th></tr></thead>
+        <tbody>${nullRows}</tbody>
+      </table>
+    </div>
+
+    <div class="panel span7">
+      <h3>Repricing letzte Nacht</h3>
+      <div class="tiles" style="margin-bottom:10px;">
+        ${tile('Preisänderungen > ±30 %', pp.repricing.changes, 'Artikel', 'üblich: 30–80 pro Nacht')}
+        ${tile('Batch-Job', 'Success', '', pp.repricing.runtime)}
+      </div>
+      <table>
+        <thead><tr><th>Größte Preisänderungen</th><th class="num">vorher</th><th class="num">nachher</th></tr></thead>
+        <tbody>${moverRows}</tbody>
+      </table>
+    </div>
+
+    <div class="panel span7">
+      <h3>System</h3>
+      <div class="tiles">
+        ${tile('API-Latenz p95', pp.system.lat, 'ms', 'Limit < 500 ms')}
+        ${tile('Fehlerrate', pp.system.err, '%', 'Limit < 1 %')}
+        ${tile('Bewertungen / Tag', pp.system.evals, '', 'Normalbereich 30–45')}
+      </div>
+    </div>
+
+    <div class="panel span5">
+      <h3>Business</h3>
+      <div class="tiles">
+        ${tile('Annahmequote Ankaufsangebote', pp.business.annahme, '%', 'Ziel > 70 % · ' + pp.business.annahmePrev)}
+        ${tile('Manuelle Preis-Korrekturen', pp.business.korrekt, '%', pp.business.korrektSub)}
+      </div>
+    </div>
+
+  </div>
+
+  <button class="sysheader rag" data-toggle="${s.id}-as" aria-expanded="false" aria-controls="${s.id}-as">
+    <span class="tri">▶</span><span class="dot"></span>Kompatibilitäts-Assistent <span class="sub">· GenAI (RAG) · Modell &amp; Prompt: siehe Journal</span><span class="chev"></span>
+  </button>
+  <div class="grid sysgrid collapsed" id="${s.id}-as">
+
+    <div class="panel span5">
+      <h3>Qualität · Eval-Suite</h3>
+      <div class="tiles">
+        ${tile('Korrektheit', as.evalk, '%', 'Ziel > 90 % · ' + as.evalkPrev)}
+        ${tile('Groundedness', as.ground, '', 'Ziel > 0,85 · ' + as.groundPrev)}
+      </div>
+      <div class="foot">nächtlich · 150 Referenzfragen · gemessen gegen den eingefrorenen Referenz-Index (Snapshot vom Frühjahr, wegen Reproduzierbarkeit)</div>
+    </div>
+
+    <div class="panel span7">
+      <h3>System &amp; Nutzung</h3>
+      <div class="tiles">
+        ${tile('Antwort-Latenz p95', as.system.lat, 's', 'Limit < 5 s')}
+        ${tile('Fehlerrate', as.system.err, '%', 'Limit < 1 %')}
+        ${tile('Chats / Tag', as.system.chats, '', as.system.chatsPrev)}
+        ${tile('Chat-Abbruchquote', as.system.abbruch, '%', as.system.abbruchPrev)}
+      </div>
+    </div>
+
+    <div class="panel span6">
+      <h3>Business · Daumen-runter-Quote im Chat (wöchentlich)</h3>
+      <div id="${s.id}-thumbs"></div>
+    </div>
+
+    <div class="panel span6">
+      <h3>Business · Folgekennzahlen</h3>
+      <div class="tiles">
+        ${tile('Support-Tickets „falsche Auskunft des Assistenten“', as.tickets, '/ Woche', as.ticketsPrev)}
+        ${tile('Retouren Zubehör, Grund „passt nicht“', as.retouren, '%', as.retourenPrev)}
+      </div>
+    </div>
+
+    <div class="panel span7">
+      <h3>Kosten · LLM-Kosten pro Tag (letzte 13 Tage)</h3>
+      <div id="${s.id}-cost"></div>
+    </div>
+
+    <div class="panel span5">
+      <h3>Kosten im Detail</h3>
+      <div class="tiles">
+        ${tile('Ø Tokens pro Antwort', as.tokens, '', as.tokensPrev)}
+        ${tile('Kosten pro Antwort', as.perAnswer, '€', 'Ziel < 0,05 €')}
+      </div>
+      <div class="foot">Budget: 5 € / Tag (≈ 150 € / Monat)</div>
+    </div>
+
+    <div class="panel span12">
+      <h3>Chat-Stichprobe · zufällige Auszüge (letzte 24 h)</h3>
+      <div class="chats">${chatCards}</div>
+    </div>
+
+  </div>
+
+  <div class="grid" style="margin-top:12px;">
+    <div class="panel span12 journal">
+      <h3>Betriebs-Journal · letzte Ereignisse</h3>
+      <table><tbody>${journalRows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+/* ---------- Tabs ---------- */
+const tabs = document.querySelectorAll('nav [role="tab"]');
+const panels = document.querySelectorAll('section[role="tabpanel"]');
+tabs.forEach(t => t.addEventListener('click', () => {
+  tabs.forEach(x => x.setAttribute('aria-selected', x === t ? 'true' : 'false'));
+  panels.forEach(p => p.classList.toggle('active', p.id === t.dataset.tab));
+  window.scrollTo({top: 0});
+}));
+document.addEventListener('keydown', e => {
+  const map = {'0':'start','1':'s1','2':'s2','3':'s3','4':'s4'};
+  if (map[e.key] && !e.metaKey && !e.ctrlKey && !e.altKey && document.activeElement.tagName !== 'INPUT') {
+    document.querySelector(`nav [data-tab="${map[e.key]}"]`).click();
+  }
+});
+
+/* ---------- Minimal line chart with hover + table view ---------- */
+function lineChart(elId, cfg) {
+  const el = document.getElementById(elId);
+  const W = 640, H = 230, padL = 46, padR = 16, padT = 14, padB = 30;
+  const n = cfg.values.length;
+  const ymin = cfg.ymin, ymax = cfg.ymax;
+  const X = i => padL + (W - padL - padR) * (n === 1 ? 0.5 : i / (n - 1));
+  const Y = v => padT + (H - padT - padB) * (1 - (v - ymin) / (ymax - ymin));
+  const fmt = v => v.toLocaleString('de-DE', {minimumFractionDigits: cfg.dec, maximumFractionDigits: cfg.dec});
+
+  let s = `<div class="chartwrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${cfg.aria}">`;
+
+  cfg.ticks.forEach(v => {
+    s += `<line x1="${padL}" y1="${Y(v)}" x2="${W - padR}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+    s += `<text x="${padL - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" style="font-variant-numeric:tabular-nums">${fmt(v)}</text>`;
+  });
+
+  if (cfg.target !== undefined) {
+    s += `<line x1="${padL}" y1="${Y(cfg.target)}" x2="${W - padR}" y2="${Y(cfg.target)}" stroke="var(--baseline)" stroke-width="1.5"/>`;
+    s += `<text x="${padL + 6}" y="${Y(cfg.target) - 5}" text-anchor="start" font-size="11" fill="var(--muted)">${cfg.targetLabel}</text>`;
+  }
+
+  const step = n > 9 ? 2 : 1;
+  cfg.labels.forEach((lb, i) => {
+    if (i % step === 0 || i === n - 1) {
+      if (n > 9 && i === n - 2) return;
+      const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+      s += `<text x="${X(i)}" y="${H - 8}" text-anchor="${anchor}" font-size="11" fill="var(--muted)">${lb}</text>`;
+    }
+  });
+
+  s += `<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--baseline)" stroke-width="1"/>`;
+
+  const pts = cfg.values.map((v, i) => `${X(i)},${Y(v)}`).join(' ');
+  s += `<polyline points="${pts}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  cfg.values.forEach((v, i) => {
+    s += `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+
+  const last = n - 1;
+  s += `<text x="${X(last)}" y="${Y(cfg.values[last]) - 10}" text-anchor="end" font-size="12" font-weight="600" fill="var(--ink)">${fmt(cfg.values[last])}${cfg.unit}</text>`;
+
+  s += `<line id="${elId}-ch" x1="0" y1="${padT}" x2="0" y2="${H - padB}" stroke="var(--muted)" stroke-width="1" opacity="0" pointer-events="none"/>`;
+  s += `<rect x="${padL}" y="${padT}" width="${W - padL - padR}" height="${H - padT - padB}" fill="transparent" id="${elId}-hit"/>`;
+  s += `</svg><div class="tooltip" id="${elId}-tt"></div>`;
+
+  s += `<details class="tableview"><summary>Werte als Tabelle</summary><table><thead><tr>`;
+  cfg.labels.forEach(lb => s += `<th class="num">${lb}</th>`);
+  s += `</tr></thead><tbody><tr>`;
+  cfg.values.forEach(v => s += `<td class="num">${fmt(v)}${cfg.unit}</td>`);
+  s += `</tr></tbody></table></details></div>`;
+
+  el.innerHTML = s;
+
+  const svg = el.querySelector('svg');
+  const hit = document.getElementById(elId + '-hit');
+  const ch = document.getElementById(elId + '-ch');
+  const tt = document.getElementById(elId + '-tt');
+  hit.addEventListener('mousemove', e => {
+    const r = svg.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (W / r.width);
+    let best = 0, bd = 1e9;
+    for (let i = 0; i < n; i++) { const d = Math.abs(X(i) - sx); if (d < bd) { bd = d; best = i; } }
+    ch.setAttribute('x1', X(best)); ch.setAttribute('x2', X(best)); ch.setAttribute('opacity', '0.5');
+    tt.style.display = 'block';
+    tt.style.left = (X(best) / W * r.width) + 'px';
+    tt.style.top = (Y(cfg.values[best]) / H * r.height) + 'px';
+    tt.innerHTML = `<span class="tl">${cfg.labels[best]}</span> · <b>${fmt(cfg.values[best])}${cfg.unit}</b>`;
+  });
+  hit.addEventListener('mouseleave', () => { ch.setAttribute('opacity', '0'); tt.style.display = 'none'; });
+}
+
+/* ---------- Build all snapshots ---------- */
+const COST_LABELS = ['vor 13 T','vor 12 T','vor 11 T','vor 10 T','vor 9 T','vor 8 T','vor 7 T','vor 6 T','vor 5 T','vor 4 T','vor 3 T','vor 2 T','gestern'];
+const THUMB_LABELS = ['vor 4 Wochen','vor 3 Wochen','vor 2 Wochen','letzte Woche'];
+
+SNAPSHOTS.forEach(s => {
+  document.getElementById(s.id).innerHTML = renderSnapshot(s);
+  s.pp && document.getElementById(s.id).querySelectorAll('.sysheader').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.toggle);
+      const open = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      target.classList.toggle('collapsed', open);
+    });
+  });
+  lineChart(`${s.id}-hitrate`, {
+    values: s.pp.hitrate, labels: s.pp.hitlabels,
+    ymin: 60, ymax: 90, ticks: [60, 70, 80, 90], dec: 1, unit: ' %',
+    target: 80, targetLabel: 'Ziel 80 %',
+    aria: 'Trefferquote plus/minus 10 Prozent über 8 Wochen',
+  });
+  lineChart(`${s.id}-thumbs`, {
+    values: s.as.thumbs, labels: THUMB_LABELS,
+    ymin: 0, ymax: 14, ticks: [0, 5, 10], dec: 1, unit: ' %',
+    target: 5, targetLabel: 'Ziel < 5 %',
+    aria: 'Daumen-runter-Quote im Chat über 4 Wochen',
+  });
+  lineChart(`${s.id}-cost`, {
+    values: s.as.cost, labels: COST_LABELS,
+    ymin: 0, ymax: 60, ticks: [0, 20, 40, 60], dec: 2, unit: ' €',
+    target: 5, targetLabel: 'Budget 5 € / Tag',
+    aria: 'LLM-Kosten pro Tag über 13 Tage',
+  });
+});
+</script>
+</body>
+</html>
